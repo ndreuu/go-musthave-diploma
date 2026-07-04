@@ -126,3 +126,40 @@ func (r *MemoryRepository) GetOrdersByUserID(ctx context.Context, userID int64) 
 
 	return result, nil
 }
+
+func (r *MemoryRepository) GetOrdersForAccrual(ctx context.Context, limit int) ([]model.Order, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	orders := make([]model.Order, 0, limit)
+
+	for _, order := range r.orders {
+		if order.Status == model.OrderStatusNew ||
+			order.Status == model.OrderStatusProcessing {
+			orders = append(orders, *order)
+
+			if len(orders) >= limit {
+				break
+			}
+		}
+	}
+
+	return orders, nil
+}
+
+func (r *MemoryRepository) UpdateOrderAccrual(ctx context.Context, number string, status model.OrderStatus, accrual *float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	order, ok := r.orders[number]
+	if !ok {
+		return ErrNotFound
+	}
+
+	order.Status = status
+	order.Accrual = accrual
+
+	r.orders[number] = order
+
+	return nil
+}

@@ -187,3 +187,60 @@ func (r *PostgresRepository) GetWithdrawalsByUserID(ctx context.Context, userID 
 
 	return withdrawals, nil
 }
+
+func (r *PostgresRepository) GetOrdersForAccrual(ctx context.Context, limit int) ([]model.Order, error) {
+	const query = `
+		SELECT number, user_id, status, accrual, uploaded_at
+		FROM orders
+		WHERE status IN ($1, $2)
+		ORDER BY uploaded_at ASC
+		LIMIT $3
+	`
+
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		model.OrderStatusNew,
+		model.OrderStatusProcessing,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []model.Order
+
+	for rows.Next() {
+		var order model.Order
+		if err := rows.Scan(
+			&order.Number,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		orders = append(orders, order)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+func (r *PostgresRepository) UpdateOrderAccrual(ctx context.Context, number string, status model.OrderStatus, accrual *float64) error {
+	const query = `
+		UPDATE orders
+		SET status = $2,
+		    accrual = $3
+		WHERE number = $1
+	`
+
+	_, err := r.db.ExecContext(ctx, query, number, status, accrual)
+	return err
+}

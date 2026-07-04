@@ -52,6 +52,14 @@ func main() {
 	tokenService := service.NewTokenService("super-secret-key")
 	balanceService := service.NewBalanceService(storage, storage)
 
+	if cfg.AccrualSystemAddress != "" {
+		accrualClient := service.NewAccrualClient(cfg.AccrualSystemAddress)
+		accrualPoller := service.NewAccrualPoller(storage, accrualClient, log)
+
+		ctx := context.Background()
+		go accrualPoller.Start(ctx)
+	}
+
 	router := handler.NewRouter(
 		log,
 		authService,
