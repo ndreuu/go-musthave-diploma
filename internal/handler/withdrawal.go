@@ -8,12 +8,38 @@ import (
 	"go-musthave-diploma/internal/middleware"
 )
 
+// withdrawalResponse represents a single withdrawal record in the JSON response.
+//
+// Contains the order number, withdrawal amount, and processing timestamp.
 type withdrawalResponse struct {
-	Order       string    `json:"order"`
-	Sum         float64   `json:"sum"`
+	// Order is the order number associated with the withdrawal.
+	Order string `json:"order"`
+
+	// Sum is the amount of points withdrawn.
+	Sum float64 `json:"sum"`
+
+	// ProcessedAt is the timestamp when the withdrawal was processed.
 	ProcessedAt time.Time `json:"processed_at"`
 }
 
+// GetWithdrawals handles requests to retrieve the user's withdrawal history.
+//
+// Requires authentication via JWT token in the Authorization header.
+// Returns all withdrawals made by the authenticated user with their
+// associated order numbers, amounts, and processing timestamps.
+//
+// Response codes:
+//   - 200 OK: Returns list of withdrawals
+//   - 204 No Content: User has no withdrawal history
+//   - 401 Unauthorized: Missing or invalid authentication token
+//   - 500 Internal Server Error: Database or service error
+//
+// Response body (on success): Array of withdrawal objects
+//
+//	[
+//	  {"order": "12345678901", "sum": 100.5, "processed_at": "2024-01-01T00:00:00Z"},
+//	  {"order": "98765432109", "sum": 200.0, "processed_at": "2024-01-02T00:00:00Z"}
+//	]
 func (h *Handler) GetWithdrawals(c *gin.Context) {
 	userID, ok := middleware.UserIDFromGin(c)
 	if !ok {
