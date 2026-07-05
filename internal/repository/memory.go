@@ -163,3 +163,33 @@ func (r *MemoryRepository) UpdateOrderAccrual(ctx context.Context, number string
 
 	return nil
 }
+
+func (r *MemoryRepository) GetAccrualSumByUserID(ctx context.Context, userID int64) (float64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var sum float64
+
+	for _, order := range r.orders {
+		if order.UserID == userID && order.Accrual != nil {
+			sum += *order.Accrual
+		}
+	}
+
+	return sum, nil
+}
+
+func (r *MemoryRepository) GetWithdrawalSumByUserID(ctx context.Context, userID int64) (float64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var sum float64
+
+	for _, withdrawal := range r.withdrawals {
+		if withdrawal.UserID == userID {
+			sum += withdrawal.Sum
+		}
+	}
+
+	return sum, nil
+}

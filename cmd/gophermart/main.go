@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"go-musthave-diploma/internal/config"
 	"go-musthave-diploma/internal/handler"
@@ -23,6 +26,9 @@ func main() {
 		panic(err)
 	}
 	defer log.Sync()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	var storage repository.Storage
 
@@ -49,14 +55,19 @@ func main() {
 
 	authService := service.NewAuthService(storage)
 	orderService := service.NewOrderService(storage)
-	tokenService := service.NewTokenService("super-secret-key")
+	tokenService := service.NewTokenService(cfg.JWTSecret)
 	balanceService := service.NewBalanceService(storage, storage)
 
 	if cfg.AccrualSystemAddress != "" {
 		accrualClient := service.NewAccrualClient(cfg.AccrualSystemAddress)
-		accrualPoller := service.NewAccrualPoller(storage, accrualClient, log)
+		accrualPoller := service.NewAccrualPoller(
+			storage,
+			accrualClient,
+			log,
+			cfg.AccrualPollInterval,
+			cfg.AccrualBatchSize,
+		)
 
-		ctx := context.Background()
 		go accrualPoller.Start(ctx)
 	}
 
@@ -68,9 +79,27 @@ func main() {
 		balanceService,
 	)
 
-	log.Info("starting server")
+	server := &http.Server{
+		Addr:    cfg.RunAddress,
+		Handler: router,
+	}
 
-	if err := http.ListenAndServe(cfg.RunAddress, router); err != nil {
-		log.Fatal(err.Error())
+	go func() {
+		log.Info("starting server", zap.String("addr", cfg.RunAddress))
+
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("server failed", zap.Error(err))
+		}
+	}()
+
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error("server shutdown failed", zap.Error(err))
+	} else {
+		log.Info("server stopped gracefully")
 	}
 }

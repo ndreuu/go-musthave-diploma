@@ -244,3 +244,35 @@ func (r *PostgresRepository) UpdateOrderAccrual(ctx context.Context, number stri
 	_, err := r.db.ExecContext(ctx, query, number, status, accrual)
 	return err
 }
+
+func (r *PostgresRepository) GetAccrualSumByUserID(ctx context.Context, userID int64) (float64, error) {
+	const query = `
+		SELECT COALESCE(SUM(accrual), 0)
+		FROM orders
+		WHERE user_id = $1
+	`
+
+	var sum float64
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&sum)
+	if err != nil {
+		return 0, err
+	}
+
+	return sum, nil
+}
+
+func (r *PostgresRepository) GetWithdrawalSumByUserID(ctx context.Context, userID int64) (float64, error) {
+	const query = `
+		SELECT COALESCE(SUM(sum), 0)
+		FROM withdrawals
+		WHERE user_id = $1
+	`
+
+	var sum float64
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&sum)
+	if err != nil {
+		return 0, err
+	}
+
+	return sum, nil
+}

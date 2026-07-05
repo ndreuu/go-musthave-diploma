@@ -16,41 +16,29 @@ type Balance struct {
 }
 
 type BalanceService struct {
-	orders      repository.OrderRepository
+	balance    repository.BalanceRepository
 	withdrawals repository.WithdrawalRepository
 }
 
 func NewBalanceService(
-	orders repository.OrderRepository,
+	balance repository.BalanceRepository,
 	withdrawals repository.WithdrawalRepository,
 ) *BalanceService {
 	return &BalanceService{
-		orders:      orders,
+		balance:     balance,
 		withdrawals: withdrawals,
 	}
 }
 
 func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*Balance, error) {
-	orders, err := s.orders.GetOrdersByUserID(ctx, userID)
+	accrued, err := s.balance.GetAccrualSumByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	withdrawals, err := s.withdrawals.GetWithdrawalsByUserID(ctx, userID)
+	withdrawn, err := s.balance.GetWithdrawalSumByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-
-	var accrued float64
-	for _, order := range orders {
-		if order.Accrual != nil {
-			accrued += *order.Accrual
-		}
-	}
-
-	var withdrawn float64
-	for _, withdrawal := range withdrawals {
-		withdrawn += withdrawal.Sum
 	}
 
 	return &Balance{
