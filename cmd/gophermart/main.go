@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"os/signal"
@@ -65,12 +66,11 @@ func main() {
 	group, groupCtx := errgroup.WithContext(ctx)
 
 	var storage repository.Storage
-
+	
 	// Initialize storage: in-memory for testing, PostgreSQL for production
 	if cfg.DatabaseURI == "" {
 		storage = repository.NewMemoryRepository()
 	} else {
-		// Open PostgreSQL connection
 		pool, err := pgxpool.New(ctx, cfg.DatabaseURI)
 		if err != nil {
 			log.Fatal("failed to create database pool", zap.Error(err))
@@ -79,6 +79,20 @@ func main() {
 		if err := pool.Ping(ctx); err != nil {
 			pool.Close()
 			log.Fatal("failed to ping database", zap.Error(err))
+		}
+
+		migrationDB, err := sql.Open("pgx", cfg.DatabaseURI)
+		if err != nil {
+			pool.Close()
+			log.Fatal("failed to open migration database", zap.Error(err))
+		}
+
+		if err := repository.RunMigrations(migrationDB, log); err != nil {
+			log.Fatal("failed to run migrations", zap.Error(err))
+		}
+
+		if err := migrationDB.Close(); err != nil {
+			log.Error("failed to close migration database", zap.Error(err))
 		}
 
 		defer pool.Close()

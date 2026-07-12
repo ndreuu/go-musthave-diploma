@@ -36,7 +36,10 @@ import (
 //	if err := repository.RunMigrations(db, dsn, logger); err != nil {
 //	    return fmt.Errorf("failed to run migrations: %w", err)
 //	}
-func RunMigrations(db *sql.DB, databaseURI string, logger *zap.Logger) error {
+func RunMigrations(
+	db *sql.DB,
+	logger *zap.Logger,
+) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		return err
@@ -44,23 +47,27 @@ func RunMigrations(db *sql.DB, databaseURI string, logger *zap.Logger) error {
 
 	m, err := migrate.NewWithDatabaseInstance(
 		"file://migrations",
-		databaseURI,
+		"postgres",
 		driver,
 	)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_, _ = m.Close()
+	}()
 
 	err = m.Up()
-	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+	switch {
+	case err == nil:
+		logger.Info("migrations applied")
+		return nil
+
+	case errors.Is(err, migrate.ErrNoChange):
+		logger.Info("migrations: no changes")
+		return nil
+
+	default:
 		return err
 	}
-
-	if errors.Is(err, migrate.ErrNoChange) {
-		logger.Info("migrations: no changes")
-	} else {
-		logger.Info("migrations applied")
-	}
-
-	return nil
 }
