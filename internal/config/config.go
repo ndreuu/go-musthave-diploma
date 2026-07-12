@@ -9,6 +9,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"os"
 	"strconv"
@@ -52,9 +53,11 @@ type Config struct {
 //   - JWTSecret:           "super-secret-key"
 //   - AccrualPollInterval: 1s
 //   - AccrualBatchSize:    10
-func Load() *Config {
+func Load() (*Config, error) {
 	return LoadFrom(flag.CommandLine, os.Getenv, os.Args[1:])
 }
+
+var ErrJWTSecretNotSet = errors.New("JWT secret is not set")
 
 // LoadFrom reads configuration from the provided flag set, environment variable
 // getter function, and command-line arguments.
@@ -87,10 +90,9 @@ func LoadFrom(
 	fs *flag.FlagSet,
 	getenv func(string) string,
 	args []string,
-) *Config {
+) (*Config, error) {
 	cfg := &Config{
 		RunAddress:          ":8080",
-		JWTSecret:           "super-secret-key",
 		AccrualPollInterval: time.Second,
 		AccrualBatchSize:    10,
 	}
@@ -130,7 +132,13 @@ func LoadFrom(
 	fs.StringVar(&cfg.AccrualSystemAddress, "r", cfg.AccrualSystemAddress, "accrual address")
 	fs.StringVar(&cfg.JWTSecret, "s", cfg.JWTSecret, "JWT secret")
 
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
 
-	return cfg
+	if cfg.JWTSecret == "" {
+		return nil, ErrJWTSecretNotSet
+	}
+
+	return cfg, nil
 }

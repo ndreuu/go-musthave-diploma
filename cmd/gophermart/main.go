@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -37,12 +38,10 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	// Load configuration from flags and environment variables
-	cfg := config.Load()
-
 	// Initialize structured logger
 	log, err := logger.NewLogger("info")
 	if err != nil {
@@ -50,9 +49,20 @@ func main() {
 	}
 	defer log.Sync()
 
+	// Load configuration from flags and environment variables
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("failed to load config", zap.Error(err))
+	}
+
 	// Set up context with graceful shutdown on SIGINT/SIGTERM
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	ctx, cancel := context.WithCancel(signalCtx)
+	defer cancel()
+
+	group, groupCtx := errgroup.WithContext(ctx)
 
 	var storage repository.Storage
 
@@ -98,7 +108,11 @@ func main() {
 			cfg.AccrualBatchSize,
 		)
 
-		go accrualPoller.Start(ctx)
+		group.Go(func() error {
+			accrualPoller.Start(groupCtx)
+			return nil
+		})
+
 	}
 
 	// Set up HTTP router with all handlers
@@ -117,24 +131,36 @@ func main() {
 	}
 
 	// Start server in a goroutine
-	go func() {
+	group.Go(func() error {
+		defer cancel()
+
 		log.Info("starting server", zap.String("addr", cfg.RunAddress))
 
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("server failed", zap.Error(err))
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
 		}
-	}()
+
+		return nil
+	})
 
 	// Wait for shutdown signal
-	<-ctx.Done()
+	group.Go(func() error {
+		<-groupCtx.Done()
 
-	// Graceful shutdown with 5-second timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Error("server shutdown failed", zap.Error(err))
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err := group.Wait(); err != nil {
+		log.Error("application stopped with error", zap.Error(err))
 	} else {
-		log.Info("server stopped gracefully")
+		log.Info("application stopped gracefully")
 	}
 }

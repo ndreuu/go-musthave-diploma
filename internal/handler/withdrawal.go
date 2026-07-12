@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"go-musthave-diploma/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // withdrawalResponse represents a single withdrawal record in the JSON response.
@@ -49,6 +51,12 @@ func (h *Handler) GetWithdrawals(c *gin.Context) {
 
 	withdrawals, err := h.balanceService.GetWithdrawals(c.Request.Context(), userID)
 	if err != nil {
+		h.log.Error(
+			"failed to get user withdrawals",
+			zap.Error(err),
+			zap.Int64("user_id", userID),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}

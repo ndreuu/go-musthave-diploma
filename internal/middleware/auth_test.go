@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -118,7 +119,13 @@ func TestUserIDFromGin(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	c.Set(UserIDKey, int64(123))
+	ctx := context.WithValue(
+		context.Background(),
+		userIDKey,
+		int64(123),
+	)
+
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 	userID, ok := UserIDFromGin(c)
 
@@ -150,7 +157,7 @@ func TestUserIDFromGin_WrongType(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	c.Set(UserIDKey, "not-an-int64")
+	c.Set(userIDKey, "not-an-int64")
 
 	_, ok := UserIDFromGin(c)
 

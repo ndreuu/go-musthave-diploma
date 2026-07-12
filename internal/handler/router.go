@@ -13,11 +13,38 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
+	"context"
 	"go-musthave-diploma/internal/middleware"
-	"go-musthave-diploma/internal/service"
+	"go-musthave-diploma/internal/model"
+
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+// AuthService defines the interface for user authentication operations.
+//
+// Implementations handle user registration and login, returning
+// user data on success or appropriate errors on failure.
+type AuthService interface {
+	Register(ctx context.Context, login, password string) (*model.User, error)
+	Login(ctx context.Context, login, password string) (*model.User, error)
+}
+
+type TokenService interface {
+	Generate(userID int64) (string, error)
+	Parse(token string) (int64, error)
+}
+
+type OrderService interface {
+	UploadOrder(ctx context.Context, userID int64, number string) error
+	GetOrders(ctx context.Context, userID int64) ([]model.Order, error)
+}
+
+type BalanceService interface {
+	GetBalance(ctx context.Context, userID int64) (*model.Balance, error)
+	Withdraw(ctx context.Context, userID int64, order string, sum float64) error
+	GetWithdrawals(ctx context.Context, userID int64) ([]model.Withdrawal, error)
+}
 
 // Handler is the main HTTP handler that processes incoming requests
 // and delegates them to appropriate service layer methods.
@@ -29,16 +56,16 @@ type Handler struct {
 	log *zap.Logger
 
 	// authService handles user registration and login operations.
-	authService *service.AuthService
+	authService AuthService
 
 	// tokenService handles JWT token generation and validation.
-	tokenService *service.TokenService
+	tokenService TokenService
 
 	// orderService handles order upload and retrieval operations.
-	orderService *service.OrderService
+	orderService OrderService
 
 	// balanceService handles balance queries and withdrawal operations.
-	balanceService *service.BalanceService
+	balanceService BalanceService
 }
 
 // NewRouter creates and configures a new Gin router with all API endpoints.
@@ -59,10 +86,10 @@ type Handler struct {
 //   - Configured *gin.Engine ready to serve HTTP requests
 func NewRouter(
 	log *zap.Logger,
-	authService *service.AuthService,
-	tokenService *service.TokenService,
-	orderService *service.OrderService,
-	balanceService *service.BalanceService,
+	authService AuthService,
+	tokenService TokenService,
+	orderService OrderService,
+	balanceService BalanceService,
 ) *gin.Engine {
 	h := &Handler{
 		log:            log,

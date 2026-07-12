@@ -12,18 +12,6 @@ import (
 // than are available in the user's current balance.
 var ErrNotEnoughBalance = errors.New("not enough balance")
 
-// Balance represents a user's loyalty points balance.
-//
-// It includes both the current available balance and the total amount
-// withdrawn by the user.
-type Balance struct {
-	// Current is the available balance (accrued - withdrawn).
-	Current float64
-
-	// Withdrawn is the total amount of points withdrawn by the user.
-	Withdrawn float64
-}
-
 // BalanceService handles balance queries and withdrawal operations.
 //
 // It calculates user balances based on accrued points from orders
@@ -81,7 +69,7 @@ func NewBalanceService(
 //	    return err
 //	}
 //	fmt.Printf("Current: %.2f, Withdrawn: %.2f\n", balance.Current, balance.Withdrawn)
-func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*Balance, error) {
+func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
 	accrued, err := s.balance.GetAccrualSumByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -92,7 +80,7 @@ func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*Balance
 		return nil, err
 	}
 
-	return &Balance{
+	return &model.Balance{
 		Current:   accrued - withdrawn,
 		Withdrawn: withdrawn,
 	}, nil

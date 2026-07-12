@@ -8,6 +8,7 @@ import (
 	"go-musthave-diploma/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // balanceResponse represents the JSON response for balance queries.
@@ -53,6 +54,12 @@ func (h *Handler) GetBalance(c *gin.Context) {
 
 	balance, err := h.balanceService.GetBalance(c.Request.Context(), userID)
 	if err != nil {
+		h.log.Error(
+			"failed to get user balance",
+			zap.Error(err),
+			zap.Int64("user_id", userID),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -99,6 +106,14 @@ func (h *Handler) Withdraw(c *gin.Context) {
 		case errors.Is(err, service.ErrNotEnoughBalance):
 			c.Status(http.StatusPaymentRequired)
 		default:
+			h.log.Error(
+				"failed to withdraw points",
+				zap.Error(err),
+				zap.Int64("user_id", userID),
+				zap.String("order", req.Order),
+				zap.Float64("sum", req.Sum),
+			)
+
 			c.Status(http.StatusInternalServerError)
 		}
 		return

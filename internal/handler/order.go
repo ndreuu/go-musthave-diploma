@@ -12,6 +12,7 @@ import (
 	"go-musthave-diploma/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // UploadOrder handles requests to upload a new order number for processing.
@@ -58,6 +59,13 @@ func (h *Handler) UploadOrder(c *gin.Context) {
 		case errors.Is(err, service.ErrOrderUploadedByAnother):
 			c.Status(http.StatusConflict)
 		default:
+			h.log.Error(
+				"failed to upload order",
+				zap.Error(err),
+				zap.Int64("user_id", userID),
+				zap.String("order", number),
+			)
+
 			c.Status(http.StatusInternalServerError)
 		}
 		return
@@ -111,6 +119,12 @@ func (h *Handler) GetOrders(c *gin.Context) {
 
 	orders, err := h.orderService.GetOrders(c.Request.Context(), userID)
 	if err != nil {
+		h.log.Error(
+			"failed to get user orders",
+			zap.Error(err),
+			zap.Int64("user_id", userID),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}

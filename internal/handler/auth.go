@@ -4,19 +4,11 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"go-musthave-diploma/internal/service"
-)
 
-// AuthService defines the interface for user authentication operations.
-//
-// Implementations handle user registration and login, returning
-// user data on success or appropriate errors on failure.
-type AuthService interface {
-	// Register creates a new user account with the given login and password.
-	// Returns the created user or an error if registration fails.
-	Register(ctx gin.Context, login string, password string)
-}
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
 
 // authRequest represents the JSON payload for authentication endpoints.
 //
@@ -67,12 +59,24 @@ func (h *Handler) Register(c *gin.Context) {
 			return
 		}
 
+		h.log.Error(
+			"failed to register user",
+			zap.Error(err),
+			zap.String("login", req.Login),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	token, err := h.tokenService.Generate(user.ID)
 	if err != nil {
+		h.log.Error(
+			"failed to generate token after registration",
+			zap.Error(err),
+			zap.Int64("user_id", user.ID),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -109,12 +113,25 @@ func (h *Handler) Login(c *gin.Context) {
 			return
 		}
 
+		h.log.Error(
+			"failed to authenticate user",
+			zap.Error(err),
+			zap.String("login", req.Login),
+		)
+
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	token, err := h.tokenService.Generate(user.ID)
 	if err != nil {
+		h.log.Error(
+			"failed to generate token after login",
+			zap.Error(err),
+			zap.Int64("user_id", user.ID),
+		)
+
 		c.Status(http.StatusInternalServerError)
 		return
 	}
