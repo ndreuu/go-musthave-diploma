@@ -35,6 +35,63 @@ type MemoryRepository struct {
 	withdrawals []model.Withdrawal
 }
 
+func (r *MemoryRepository) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var accrued float64
+	var withdrawn float64
+
+	for _, order := range r.orders {
+		if order.UserID == userID && order.Accrual != nil {
+			accrued += *order.Accrual
+		}
+	}
+
+	for _, w := range r.withdrawals {
+		if w.UserID == userID {
+			withdrawn += w.Sum
+		}
+	}
+
+	return &model.Balance{
+		Current:   accrued - withdrawn,
+		Withdrawn: withdrawn,
+	}, nil
+}
+
+func (r *MemoryRepository) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var accrued float64
+	for _, item := range r.orders {
+		if item.UserID == userID && item.Accrual != nil {
+			accrued += *item.Accrual
+		}
+	}
+
+	var withdrawn float64
+	for _, item := range r.withdrawals {
+		if item.UserID == userID {
+			withdrawn += item.Sum
+		}
+	}
+
+	if accrued-withdrawn < sum {
+		return ErrNotEnoughBalance
+	}
+
+	r.withdrawals = append(r.withdrawals, model.Withdrawal{
+		Order:       order,
+		UserID:      userID,
+		Sum:         sum,
+		ProcessedAt: time.Now(),
+	})
+
+	return nil
+}
+
 // NewMemoryRepository creates and initializes a new in-memory repository.
 //
 // The repository starts empty with nextID set to 1. All internal maps
@@ -53,33 +110,6 @@ func NewMemoryRepository() *MemoryRepository {
 		users:  make(map[string]*model.User),
 		orders: make(map[string]*model.Order),
 	}
-}
-
-// CreateWithdrawal adds a new withdrawal record to the repository.
-//
-// The withdrawal is created with the current timestamp as ProcessedAt.
-// This method is thread-safe and acquires a write lock.
-//
-// Parameters:
-//   - ctx: Context for cancellation (not used in memory implementation)
-//   - userID: ID of the user making the withdrawal
-//   - order: Order number associated with the withdrawal
-//   - sum: Amount of points to withdraw
-//
-// Returns:
-//   - error: Always nil for memory implementation
-func (r *MemoryRepository) CreateWithdrawal(ctx context.Context, userID int64, order string, sum float64) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.withdrawals = append(r.withdrawals, model.Withdrawal{
-		Order:       order,
-		UserID:      userID,
-		Sum:         sum,
-		ProcessedAt: time.Now(),
-	})
-
-	return nil
 }
 
 // GetWithdrawalsByUserID retrieves all withdrawals for a specific user.
@@ -306,33 +336,6 @@ func (r *MemoryRepository) UpdateOrderAccrual(ctx context.Context, number string
 	r.orders[number] = order
 
 	return nil
-}
-
-// GetAccrualSumByUserID calculates the total accrued points for a user.
-//
-// Sums the accrual amounts from all orders with non-nil accrual values.
-// This method is thread-safe and acquires a read lock.
-//
-// Parameters:
-//   - ctx: Context for cancellation (not used in memory implementation)
-//   - userID: ID of the user to calculate accrual for
-//
-// Returns:
-//   - float64: Total accrued points (0 if no orders or no accruals)
-//   - error: Always nil for memory implementation
-func (r *MemoryRepository) GetAccrualSumByUserID(ctx context.Context, userID int64) (float64, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var sum float64
-
-	for _, order := range r.orders {
-		if order.UserID == userID && order.Accrual != nil {
-			sum += *order.Accrual
-		}
-	}
-
-	return sum, nil
 }
 
 // GetWithdrawalSumByUserID calculates the total withdrawn points for a user.

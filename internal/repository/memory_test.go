@@ -53,38 +53,6 @@ func TestMemoryRepository_UserNotFound(t *testing.T) {
 	}
 }
 
-func TestMemoryRepository_OrderAccrual(t *testing.T) {
-	ctx := context.Background()
-	repo := NewMemoryRepository()
-
-	if err := repo.CreateOrder(ctx, 1, "9278923470"); err != nil {
-		t.Fatalf("CreateOrder() error = %v", err)
-	}
-
-	accrual := 500.0
-	if err := repo.UpdateOrderAccrual(ctx, "9278923470", model.OrderStatusProcessed, &accrual); err != nil {
-		t.Fatalf("UpdateOrderAccrual() error = %v", err)
-	}
-
-	order, err := repo.GetOrderByNumber(ctx, "9278923470")
-	if err != nil {
-		t.Fatalf("GetOrderByNumber() error = %v", err)
-	}
-
-	if order.Status != model.OrderStatusProcessed {
-		t.Fatalf("status = %q", order.Status)
-	}
-
-	sum, err := repo.GetAccrualSumByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetAccrualSumByUserID() error = %v", err)
-	}
-
-	if sum != 500 {
-		t.Fatalf("sum = %v, want 500", sum)
-	}
-}
-
 func TestMemoryRepository_OrderNotFound(t *testing.T) {
 	ctx := context.Background()
 	repo := NewMemoryRepository()
@@ -153,33 +121,6 @@ func TestMemoryRepository_GetOrdersForAccrual_Limit(t *testing.T) {
 	}
 }
 
-func TestMemoryRepository_Withdrawals(t *testing.T) {
-	ctx := context.Background()
-	repo := NewMemoryRepository()
-
-	if err := repo.CreateWithdrawal(ctx, 1, "2377225624", 200); err != nil {
-		t.Fatalf("CreateWithdrawal() error = %v", err)
-	}
-
-	withdrawals, err := repo.GetWithdrawalsByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetWithdrawalsByUserID() error = %v", err)
-	}
-
-	if len(withdrawals) != 1 {
-		t.Fatalf("len = %d, want 1", len(withdrawals))
-	}
-
-	sum, err := repo.GetWithdrawalSumByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetWithdrawalSumByUserID() error = %v", err)
-	}
-
-	if sum != 200 {
-		t.Fatalf("sum = %v, want 200", sum)
-	}
-}
-
 func TestMemoryRepository_EmptyWithdrawals(t *testing.T) {
 	ctx := context.Background()
 	repo := NewMemoryRepository()
@@ -196,20 +137,6 @@ func TestMemoryRepository_EmptyWithdrawals(t *testing.T) {
 	sum, err := repo.GetWithdrawalSumByUserID(ctx, 1)
 	if err != nil {
 		t.Fatalf("GetWithdrawalSumByUserID() error = %v", err)
-	}
-
-	if sum != 0 {
-		t.Fatalf("sum = %v, want 0", sum)
-	}
-}
-
-func TestMemoryRepository_EmptyAccrual(t *testing.T) {
-	ctx := context.Background()
-	repo := NewMemoryRepository()
-
-	sum, err := repo.GetAccrualSumByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetAccrualSumByUserID() error = %v", err)
 	}
 
 	if sum != 0 {

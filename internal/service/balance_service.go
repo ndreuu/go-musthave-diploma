@@ -69,21 +69,11 @@ func NewBalanceService(
 //	    return err
 //	}
 //	fmt.Printf("Current: %.2f, Withdrawn: %.2f\n", balance.Current, balance.Withdrawn)
-func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
-	accrued, err := s.balance.GetAccrualSumByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	withdrawn, err := s.balance.GetWithdrawalSumByUserID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model.Balance{
-		Current:   accrued - withdrawn,
-		Withdrawn: withdrawn,
-	}, nil
+func (s *BalanceService) GetBalance(
+	ctx context.Context,
+	userID int64,
+) (*model.Balance, error) {
+	return s.balance.GetBalance(ctx, userID)
 }
 
 // Withdraw processes a withdrawal request for the specified user.
@@ -112,21 +102,26 @@ func (s *BalanceService) GetBalance(ctx context.Context, userID int64) (*model.B
 //	        // Handle insufficient balance
 //	    }
 //	}
-func (s *BalanceService) Withdraw(ctx context.Context, userID int64, order string, sum float64) error {
+func (s *BalanceService) Withdraw(
+	ctx context.Context,
+	userID int64,
+	order string,
+	sum float64,
+) error {
 	if !IsValidLuhn(order) {
 		return ErrInvalidOrderNumber
 	}
 
-	balance, err := s.GetBalance(ctx, userID)
+	err := s.withdrawals.Withdraw(ctx, userID, order, sum)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotEnoughBalance) {
+			return ErrNotEnoughBalance
+		}
+
 		return err
 	}
 
-	if balance.Current < sum {
-		return ErrNotEnoughBalance
-	}
-
-	return s.withdrawals.CreateWithdrawal(ctx, userID, order, sum)
+	return nil
 }
 
 // GetWithdrawals retrieves all withdrawals for the specified user.

@@ -24,4 +24,6 @@ var (
 	// an entity with a unique identifier (login, order number) that
 	// already exists in the repository.
 	ErrAlreadyExists = errors.New("already exists")
+
+	ErrNotEnoughBalance = errors.New("not enough balance")
 )

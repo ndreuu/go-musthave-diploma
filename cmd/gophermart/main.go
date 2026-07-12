@@ -23,7 +23,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"os/signal"
@@ -36,6 +35,7 @@ import (
 	"go-musthave-diploma/internal/repository"
 	"go-musthave-diploma/internal/service"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -71,24 +71,19 @@ func main() {
 		storage = repository.NewMemoryRepository()
 	} else {
 		// Open PostgreSQL connection
-		db, err := sql.Open("pgx", cfg.DatabaseURI)
+		pool, err := pgxpool.New(ctx, cfg.DatabaseURI)
 		if err != nil {
-			log.Fatal("failed to open db", zap.Error(err))
+			log.Fatal("failed to create database pool", zap.Error(err))
 		}
 
-		// Verify database connectivity
-		if err := db.PingContext(context.Background()); err != nil {
-			log.Fatal("failed to ping db", zap.Error(err))
+		if err := pool.Ping(ctx); err != nil {
+			pool.Close()
+			log.Fatal("failed to ping database", zap.Error(err))
 		}
 
-		// Run database migrations
-		if err := repository.RunMigrations(db, cfg.DatabaseURI, log); err != nil {
-			log.Fatal("failed to run migrations", zap.Error(err))
-		}
+		defer pool.Close()
 
-		defer db.Close()
-
-		storage = repository.NewPostgresRepository(db)
+		storage = repository.NewPostgresRepository(pool)
 	}
 
 	// Initialize services

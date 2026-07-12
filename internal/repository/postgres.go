@@ -2,45 +2,24 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
 	"go-musthave-diploma/internal/model"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PostgresRepository is a PostgreSQL-backed implementation of the Storage interface.
-//
-// It provides persistent storage for users, orders, and withdrawals using
-// PostgreSQL database tables. All methods use parameterized queries to prevent
-// SQL injection attacks.
-//
-// The repository expects the database schema to be set up by running migrations
-// via RunMigrations before use.
 type PostgresRepository struct {
-	// db is the underlying SQL database connection.
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewPostgresRepository creates a new PostgreSQL repository instance.
-//
-// Parameters:
-//   - db: Active PostgreSQL database connection (should be created via sql.Open)
-//
-// Returns:
-//   - *PostgresRepository: New repository instance ready for use
-//
-// Example usage:
-//
-//	db, err := sql.Open("postgres", dsn)
-//	if err != nil {
-//	    return nil, err
-//	}
-//	repo := repository.NewPostgresRepository(db)
-func NewPostgresRepository(db *sql.DB) *PostgresRepository {
-	return &PostgresRepository{db: db}
+func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
+	return &PostgresRepository{
+		pool: pool,
+	}
 }
 
 // CreateUser creates a new user with the given login and password hash.
@@ -64,7 +43,7 @@ func (r *PostgresRepository) CreateUser(ctx context.Context, login string, passw
 	`
 
 	var user model.User
-	err := r.db.QueryRowContext(ctx, query, login, passwordHash).
+	err := r.pool.QueryRow(ctx, query, login, passwordHash).
 		Scan(&user.ID, &user.Login, &user.PasswordHash)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -87,7 +66,10 @@ func (r *PostgresRepository) CreateUser(ctx context.Context, login string, passw
 // Returns:
 //   - *model.User: Pointer to the user if found
 //   - error: ErrNotFound if user doesn't exist, or database error
-func (r *PostgresRepository) GetUserByLogin(ctx context.Context, login string) (*model.User, error) {
+func (r *PostgresRepository) GetUserByLogin(
+	ctx context.Context,
+	login string,
+) (*model.User, error) {
 	const query = `
 		SELECT id, login, password_hash
 		FROM users
@@ -95,10 +77,11 @@ func (r *PostgresRepository) GetUserByLogin(ctx context.Context, login string) (
 	`
 
 	var user model.User
-	err := r.db.QueryRowContext(ctx, query, login).
+
+	err := r.pool.QueryRow(ctx, query, login).
 		Scan(&user.ID, &user.Login, &user.PasswordHash)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 
@@ -126,7 +109,7 @@ func (r *PostgresRepository) CreateOrder(ctx context.Context, userID int64, numb
 		VALUES ($1, $2, $3, $4)
 	`
 
-	_, err := r.db.ExecContext(
+	_, err := r.pool.Exec(
 		ctx,
 		query,
 		number,
@@ -163,10 +146,10 @@ func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string
 	`
 
 	var order model.Order
-	err := r.db.QueryRowContext(ctx, query, number).
+	err := r.pool.QueryRow(ctx, query, number).
 		Scan(&order.Number, &order.UserID, &order.Status, &order.Accrual, &order.UploadedAt)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 
@@ -187,7 +170,10 @@ func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string
 // Returns:
 //   - []model.Order: Slice of order records (may be empty)
 //   - error: Database error
-func (r *PostgresRepository) GetOrdersByUserID(ctx context.Context, userID int64) ([]model.Order, error) {
+func (r *PostgresRepository) GetOrdersByUserID(
+	ctx context.Context,
+	userID int64,
+) ([]model.Order, error) {
 	const query = `
 		SELECT number, user_id, status, accrual, uploaded_at
 		FROM orders
@@ -195,17 +181,24 @@ func (r *PostgresRepository) GetOrdersByUserID(ctx context.Context, userID int64
 		ORDER BY uploaded_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var orders []model.Order
+	orders := make([]model.Order, 0)
 
 	for rows.Next() {
 		var order model.Order
-		if err := rows.Scan(&order.Number, &order.UserID, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
+
+		if err := rows.Scan(
+			&order.Number,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		); err != nil {
 			return nil, err
 		}
 
@@ -217,28 +210,6 @@ func (r *PostgresRepository) GetOrdersByUserID(ctx context.Context, userID int64
 	}
 
 	return orders, nil
-}
-
-// CreateWithdrawal creates a new withdrawal record for the specified user.
-//
-// The withdrawal is recorded with the current timestamp as ProcessedAt.
-//
-// Parameters:
-//   - ctx: Context for query cancellation and timeouts
-//   - userID: ID of the user making the withdrawal
-//   - order: Order number associated with the withdrawal
-//   - sum: Amount of points to withdraw
-//
-// Returns:
-//   - error: Database error
-func (r *PostgresRepository) CreateWithdrawal(ctx context.Context, userID int64, order string, sum float64) error {
-	const query = `
-		INSERT INTO withdrawals (user_id, order_number, sum, processed_at)
-		VALUES ($1, $2, $3, $4)
-	`
-
-	_, err := r.db.ExecContext(ctx, query, userID, order, sum, time.Now())
-	return err
 }
 
 // GetWithdrawalsByUserID retrieves all withdrawals for a specific user.
@@ -260,7 +231,7 @@ func (r *PostgresRepository) GetWithdrawalsByUserID(ctx context.Context, userID 
 		ORDER BY processed_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +281,7 @@ func (r *PostgresRepository) GetOrdersForAccrual(ctx context.Context, limit int)
 		LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(
+	rows, err := r.pool.Query(
 		ctx,
 		query,
 		model.OrderStatusNew,
@@ -364,35 +335,123 @@ func (r *PostgresRepository) UpdateOrderAccrual(ctx context.Context, number stri
 		WHERE number = $1
 	`
 
-	_, err := r.db.ExecContext(ctx, query, number, status, accrual)
+	_, err := r.pool.Exec(ctx, query, number, status, accrual)
 	return err
 }
 
-// GetAccrualSumByUserID calculates the total accrued points for a user.
-//
-// Uses COALESCE to return 0 if the user has no orders or no accruals.
-//
-// Parameters:
-//   - ctx: Context for query cancellation and timeouts
-//   - userID: ID of the user to calculate accrual for
-//
-// Returns:
-//   - float64: Total accrued points (0 if none)
-//   - error: Database error
-func (r *PostgresRepository) GetAccrualSumByUserID(ctx context.Context, userID int64) (float64, error) {
+func (r *PostgresRepository) GetBalance(ctx context.Context, userID int64) (*model.Balance, error) {
 	const query = `
-		SELECT COALESCE(SUM(accrual), 0)
-		FROM orders
-		WHERE user_id = $1
+		WITH balance AS (
+			SELECT
+				COALESCE((
+					SELECT SUM(accrual)
+					FROM orders
+					WHERE user_id = $1
+				), 0) AS accrued,
+				COALESCE((
+					SELECT SUM(sum)
+					FROM withdrawals
+					WHERE user_id = $1
+				), 0) AS withdrawn
+		)
+		SELECT
+			accrued - withdrawn,
+			withdrawn
+		FROM balance
 	`
 
-	var sum float64
-	err := r.db.QueryRowContext(ctx, query, userID).Scan(&sum)
+	var balance model.Balance
+
+	err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&balance.Current,
+		&balance.Withdrawn,
+	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return sum, nil
+	return &balance, nil
+}
+
+func (r *PostgresRepository) Withdraw(
+	ctx context.Context,
+	userID int64,
+	order string,
+	sum float64,
+) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	const lockUserQuery = `
+		SELECT id
+		FROM users
+		WHERE id = $1
+		FOR UPDATE
+	`
+
+	var lockedUserID int64
+	if err := tx.QueryRow(ctx, lockUserQuery, userID).Scan(&lockedUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+
+		return err
+	}
+
+	const balanceQuery = `
+		WITH balance AS (
+			SELECT
+				COALESCE((
+					SELECT SUM(accrual)
+					FROM orders
+					WHERE user_id = $1
+				), 0) AS accrued,
+				COALESCE((
+					SELECT SUM(sum)
+					FROM withdrawals
+					WHERE user_id = $1
+				), 0) AS withdrawn
+		)
+		SELECT accrued - withdrawn
+		FROM balance
+	`
+
+	var current float64
+	if err := tx.QueryRow(ctx, balanceQuery, userID).Scan(&current); err != nil {
+		return err
+	}
+
+	if current < sum {
+		return ErrNotEnoughBalance
+	}
+
+	const createWithdrawalQuery = `
+		INSERT INTO withdrawals (
+			user_id,
+			order_number,
+			sum,
+			processed_at
+		)
+		VALUES ($1, $2, $3, $4)
+	`
+
+	if _, err := tx.Exec(
+		ctx,
+		createWithdrawalQuery,
+		userID,
+		order,
+		sum,
+		time.Now(),
+	); err != nil {
+		return err
+	}	
+
+	return tx.Commit(ctx)
 }
 
 // GetWithdrawalSumByUserID calculates the total withdrawn points for a user.
@@ -414,7 +473,7 @@ func (r *PostgresRepository) GetWithdrawalSumByUserID(ctx context.Context, userI
 	`
 
 	var sum float64
-	err := r.db.QueryRowContext(ctx, query, userID).Scan(&sum)
+	err := r.pool.QueryRow(ctx, query, userID).Scan(&sum)
 	if err != nil {
 		return 0, err
 	}

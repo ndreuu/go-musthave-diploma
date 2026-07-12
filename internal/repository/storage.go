@@ -19,6 +19,9 @@ type Storage interface {
 	BalanceRepository
 }
 
+var _ Storage = (*PostgresRepository)(nil)
+var _ Storage = (*MemoryRepository)(nil)
+
 // AccrualRepository defines the interface for accrual system operations.
 //
 // Implementations handle fetching orders that need accrual processing
@@ -38,11 +41,5 @@ type AccrualRepository interface {
 // Implementations provide methods to calculate total accrued points
 // and total withdrawn amounts for a user.
 type BalanceRepository interface {
-	// GetAccrualSumByUserID calculates the total points accrued by a user.
-	// Sums accrual amounts from all processed orders.
-	GetAccrualSumByUserID(ctx context.Context, userID int64) (float64, error)
-
-	// GetWithdrawalSumByUserID calculates the total points withdrawn by a user.
-	// Sums all withdrawal amounts for the specified user.
-	GetWithdrawalSumByUserID(ctx context.Context, userID int64) (float64, error)
+	GetBalance(ctx context.Context, userID int64) (*model.Balance, error)
 }
