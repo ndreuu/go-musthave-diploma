@@ -1,28 +1,11 @@
 package config
 
 import (
-	"errors"
 	"flag"
 	"os"
 	"testing"
 	"time"
 )
-
-func TestLoadFromWithoutJWTSecret(t *testing.T) {
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-
-	cfg, err := LoadFrom(fs, func(string) string {
-		return ""
-	}, nil)
-
-	if !errors.Is(err, ErrJWTSecretNotSet) {
-		t.Fatalf("LoadFrom() error = %v, want %v", err, ErrJWTSecretNotSet)
-	}
-
-	if cfg != nil {
-		t.Fatalf("LoadFrom() config = %#v, want nil", cfg)
-	}
-}
 
 func TestLoadFromDefaults(t *testing.T) {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)

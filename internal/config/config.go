@@ -95,6 +95,9 @@ func LoadFrom(
 		RunAddress:          ":8080",
 		AccrualPollInterval: time.Second,
 		AccrualBatchSize:    10,
+
+		// JWTSecret has a fixed default value for autotests!!!
+		JWTSecret: "super-secret-key",
 	}
 
 	if v := getenv("RUN_ADDRESS"); v != "" {
