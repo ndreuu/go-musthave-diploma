@@ -338,29 +338,3 @@ func (r *MemoryRepository) UpdateOrderAccrual(ctx context.Context, number string
 	return nil
 }
 
-// GetWithdrawalSumByUserID calculates the total withdrawn points for a user.
-//
-// Sums all withdrawal amounts for the specified user. This method is
-// thread-safe and acquires a read lock.
-//
-// Parameters:
-//   - ctx: Context for cancellation (not used in memory implementation)
-//   - userID: ID of the user to calculate withdrawals for
-//
-// Returns:
-//   - float64: Total withdrawn points (0 if no withdrawals)
-//   - error: Always nil for memory implementation
-func (r *MemoryRepository) GetWithdrawalSumByUserID(ctx context.Context, userID int64) (float64, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	var sum float64
-
-	for _, withdrawal := range r.withdrawals {
-		if withdrawal.UserID == userID {
-			sum += withdrawal.Sum
-		}
-	}
-
-	return sum, nil
-}

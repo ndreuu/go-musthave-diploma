@@ -453,30 +453,3 @@ func (r *PostgresRepository) Withdraw(
 
 	return tx.Commit(ctx)
 }
-
-// GetWithdrawalSumByUserID calculates the total withdrawn points for a user.
-//
-// Uses COALESCE to return 0 if the user has no withdrawals.
-//
-// Parameters:
-//   - ctx: Context for query cancellation and timeouts
-//   - userID: ID of the user to calculate withdrawals for
-//
-// Returns:
-//   - float64: Total withdrawn points (0 if none)
-//   - error: Database error
-func (r *PostgresRepository) GetWithdrawalSumByUserID(ctx context.Context, userID int64) (float64, error) {
-	const query = `
-		SELECT COALESCE(SUM(sum), 0)
-		FROM withdrawals
-		WHERE user_id = $1
-	`
-
-	var sum float64
-	err := r.pool.QueryRow(ctx, query, userID).Scan(&sum)
-	if err != nil {
-		return 0, err
-	}
-
-	return sum, nil
-}

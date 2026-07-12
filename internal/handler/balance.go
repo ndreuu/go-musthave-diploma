@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"go-musthave-diploma/internal/middleware"
+	"go-musthave-diploma/internal/repository"
 	"go-musthave-diploma/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -103,7 +104,7 @@ func (h *Handler) Withdraw(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrInvalidOrderNumber):
 			c.Status(http.StatusUnprocessableEntity)
-		case errors.Is(err, service.ErrNotEnoughBalance):
+		case errors.Is(err, repository.ErrNotEnoughBalance):
 			c.Status(http.StatusPaymentRequired)
 		default:
 			h.log.Error(

@@ -121,29 +121,6 @@ func TestMemoryRepository_GetOrdersForAccrual_Limit(t *testing.T) {
 	}
 }
 
-func TestMemoryRepository_EmptyWithdrawals(t *testing.T) {
-	ctx := context.Background()
-	repo := NewMemoryRepository()
-
-	withdrawals, err := repo.GetWithdrawalsByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetWithdrawalsByUserID() error = %v", err)
-	}
-
-	if len(withdrawals) != 0 {
-		t.Fatalf("len = %d, want 0", len(withdrawals))
-	}
-
-	sum, err := repo.GetWithdrawalSumByUserID(ctx, 1)
-	if err != nil {
-		t.Fatalf("GetWithdrawalSumByUserID() error = %v", err)
-	}
-
-	if sum != 0 {
-		t.Fatalf("sum = %v, want 0", sum)
-	}
-}
-
 func TestMemoryRepository_OrderOverwrite(t *testing.T) {
 	ctx := context.Background()
 	repo := NewMemoryRepository()

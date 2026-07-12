@@ -8,10 +8,6 @@ import (
 	"go-musthave-diploma/internal/repository"
 )
 
-// ErrNotEnoughBalance is returned when attempting to withdraw more points
-// than are available in the user's current balance.
-var ErrNotEnoughBalance = errors.New("not enough balance")
-
 // BalanceService handles balance queries and withdrawal operations.
 //
 // It calculates user balances based on accrued points from orders
@@ -115,7 +111,7 @@ func (s *BalanceService) Withdraw(
 	err := s.withdrawals.Withdraw(ctx, userID, order, sum)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotEnoughBalance) {
-			return ErrNotEnoughBalance
+			return repository.ErrNotEnoughBalance
 		}
 
 		return err

@@ -34,8 +34,8 @@ func TestBalanceService_WithdrawNotEnoughBalance(t *testing.T) {
 	balanceService := NewBalanceService(repo, repo)
 
 	err := balanceService.Withdraw(ctx, 1, "9278923470", 100)
-	if !errors.Is(err, ErrNotEnoughBalance) {
-		t.Fatalf("Withdraw() error = %v, want %v", err, ErrNotEnoughBalance)
+	if !errors.Is(err, repository.ErrNotEnoughBalance) {
+		t.Fatalf("Withdraw() error = %v, want %v", err, repository.ErrNotEnoughBalance)
 	}
 }
 
